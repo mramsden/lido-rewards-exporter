@@ -28,7 +28,7 @@ Resources:
       Handler: main
       Runtime: go1.x
       Role: !GetAtt FunctionRole.Arn
-      Timeout: 30
+      Timeout: 10
       Code:
         S3Bucket: !Ref LambdaZipsBucket
         S3Key: main.zip
