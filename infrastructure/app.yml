@@ -6,7 +6,7 @@ Resources:
     Properties:
       BucketName: lido-rewards-exporter-source
       VersioningConfiguration:
-        Status: Enabled
+        Status: Suspended
   FunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -99,4 +99,4 @@ Outputs:
   FunctionName:
     Value: !Ref Function
   ApiGatewayUrl:
-    Value: !Sub "https://${ApiGatewayRestApi.RestApiId}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+    Value: !Sub "https://${ApiGatewayRestApi.RestApiId}.execute-api.${AWS::Region}.amazonaws.com/prod"
