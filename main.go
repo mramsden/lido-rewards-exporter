@@ -1,51 +1,101 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
+	"bytes"
+	"encoding/csv"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"path"
+	"strconv"
+	"strings"
 	"time"
-
-	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
 
 	"github.com/mramsden/lido-rewards-exporter/lido"
 )
 
 var logger = log.New(os.Stdout, "[Handler] ", log.LstdFlags)
 
-func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	address := request.PathParameters["address"]
-	if address == "" {
-		logger.Printf("Bad request missing address path parameter in path %s", request.Path)
-		return events.APIGatewayProxyResponse{Body: "Bad Request", StatusCode: 400}, nil
-	}
+func convertRewardsReportToKoinlyCSV(report lido.RewardsReport) (string, error) {
+	b := bytes.NewBufferString("")
+	w := csv.NewWriter(b)
 
-	deadline, _ := ctx.Deadline()
-	deadline = deadline.Add(-100 * time.Millisecond)
-	timeoutChannel := time.After(time.Until(deadline))
+	w.Write([]string{"Koinly Date", "Amount", "Currency", "Label", "TxHash"})
+	for _, event := range report.Events {
+		if blockTime, err := strconv.ParseInt(event.BlockTime, 10, 64); err == nil {
 
-	for {
-		select {
-		case <-timeoutChannel:
-			logger.Printf("Deadline exceeded: %v", deadline)
-			return events.APIGatewayProxyResponse{Body: "Internal Server Error", StatusCode: 500}, nil
-		default:
-			report, err := lido.FetchRewardsReport(address)
+			date := time.Unix(blockTime, 0).UTC().Format("2006-01-02 15:04:05")
 			if err != nil {
-				return events.APIGatewayProxyResponse{Body: "Internal Server Error", StatusCode: 500}, err
+				log.Printf("error parsing rewards: %v", err)
+				return "", err
 			}
-
-			b, err := json.Marshal(report)
-			if err != nil {
-				return events.APIGatewayProxyResponse{Body: "Internal Server Error", StatusCode: 500}, err
-			}
-			return events.APIGatewayProxyResponse{Body: string(b), StatusCode: 200}, nil
+			w.Write([]string{
+				date,
+				toDecimal(event.Rewards, 18).Round(8).String(),
+				"stETH",
+				"reward",
+				event.ID,
+			})
 		}
 	}
+
+	return b.String(), nil
+}
+
+func reportHandler(w http.ResponseWriter, r *http.Request) {
+	_, file := path.Split(r.URL.Path)
+	dir := path.Dir(r.URL.Path)
+	_, address := path.Split(dir)
+	if !strings.HasPrefix(dir, "/rewards") || file != "download" || address == "" {
+		errorHandler(w, r, http.StatusNotFound)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		errorHandler(w, r, http.StatusMethodNotAllowed)
+		return
+	}
+
+	report, err := lido.FetchRewardsReport(address)
+	if err != nil {
+		log.Printf("Error fetching report: %s", err)
+		errorHandler(w, r, http.StatusInternalServerError)
+		return
+	}
+
+	reportCsv, err := convertRewardsReportToKoinlyCSV(report)
+	if err != nil {
+		log.Printf("error generating CSV: %s", err)
+		errorHandler(w, r, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment; filename=report.csv")
+	fmt.Fprint(w, reportCsv)
+}
+
+func errorHandler(w http.ResponseWriter, r *http.Request, status int) {
+	w.WriteHeader(status)
+	fmt.Fprintf(w, http.StatusText(status))
+}
+
+func newServeMux() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rewards/", reportHandler)
+	return mux
 }
 
 func main() {
-	lambda.Start(handleRequest)
+	addr := "localhost:8080"
+	s := &http.Server{
+		Addr:         addr,
+		Handler:      newServeMux(),
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	log.Printf("Listening on %s", addr)
+	log.Fatal(s.ListenAndServe())
 }
