@@ -16,6 +16,12 @@ import (
 var logger = log.New(os.Stdout, "[Handler] ", log.LstdFlags)
 
 func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	address := request.PathParameters["address"]
+	if address == "" {
+		logger.Printf("Bad request missing address path parameter in path %s", request.Path)
+		return events.APIGatewayProxyResponse{Body: "Bad Request", StatusCode: 400}, nil
+	}
+
 	deadline, _ := ctx.Deadline()
 	deadline = deadline.Add(-100 * time.Millisecond)
 	timeoutChannel := time.After(time.Until(deadline))
@@ -26,7 +32,7 @@ func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 			logger.Printf("Deadline exceeded: %v", deadline)
 			return events.APIGatewayProxyResponse{Body: "Internal Server Error", StatusCode: 500}, nil
 		default:
-			report, err := lido.FetchRewardsReport("0x03d04a5F3cc050aB69A84eB0Da3242cd84DBf724")
+			report, err := lido.FetchRewardsReport(address)
 			if err != nil {
 				return events.APIGatewayProxyResponse{Body: "Internal Server Error", StatusCode: 500}, err
 			}
