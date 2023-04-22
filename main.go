@@ -81,14 +81,20 @@ func errorHandler(w http.ResponseWriter, r *http.Request, status int) {
 	fmt.Fprintf(w, http.StatusText(status))
 }
 
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "OK")
+}
+
 func newServeMux() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/rewards/", reportHandler)
+	mux.HandleFunc("/healthz", healthHandler)
 	return mux
 }
 
 func main() {
-	addr := "localhost:8080"
+	addr := "0.0.0.0:8080"
 	s := &http.Server{
 		Addr:         addr,
 		Handler:      newServeMux(),
