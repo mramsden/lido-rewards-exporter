@@ -21,13 +21,13 @@ func TestLido(t *testing.T) {
 		r, err := FetchRewardsReport(e.address)
 		if e.expectedError != nil {
 			if !errors.Is(err, e.expectedError) {
-				t.Errorf("Expected error %v, got %v for %s", e.expectedError, err, e.description)
+				t.Errorf("expected error %v, got %v for %s", e.expectedError, err, e.description)
 			}
 		} else if err != nil {
-			t.Fatal(err)
+			t.Fatalf("unexpected error %v, for %s", err, e.description)
 		}
 		if r.TotalItems != uint64(e.expectedTotalItems) {
-			t.Errorf("Expected %v rewards, got %v for %s", e.expectedTotalItems, r.TotalItems, e.description)
+			t.Errorf("expected %v rewards, got %v for %s", e.expectedTotalItems, r.TotalItems, e.description)
 		}
 	}
 }

@@ -80,6 +80,8 @@ func FetchRewardsReportParams(address string, params RewardsReportParams) (Rewar
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusInternalServerError {
 		err = d.Decode(&errorPayload)
+	} else if resp.StatusCode == http.StatusBadRequest {
+		err = d.Decode(&errorPayload)
 	} else {
 		err = d.Decode(&report)
 	}
